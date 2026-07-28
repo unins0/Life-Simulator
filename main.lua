@@ -158,7 +158,6 @@ function removeCell(idx)
     local x, y = shares.idx2pos(idx)
     cell_batch:setColor(0.0, 0.5, 1.0, 0.1)
     cell_batch:set(idx, cell_sprites[0], x, y, 0, 0.125, 0.125, 4, 4)
-    --updateMinerals(idx)
     return true
 end
 
@@ -195,7 +194,7 @@ function tick()
     local BUFFER_SPAWN   = {}
     local BUFFER_DEATH   = {}
     local BUFFER_UPDATE  = {}
-    local BUFFER_MOVING  = {} -- {from1, to1, from2, to2}
+    local BUFFER_MOVING  = {} -- {from, to, queue_idx, ...}
     local extr_idx, spawn_idx   = 0, 0
     local death_idx, update_idx = 0, 0
     local move_idx = 0
@@ -207,13 +206,15 @@ function tick()
         local idx  = CELL_QUEUE[i]
         local cell = MAP_CELLS[idx]
         local typ  = MAP_TYPES[idx]
+
         if cell == nil then
-            pause = true
-            return
+            goto continue
         end
+
         cell[4] = cell[4] - CELL_ENERGY_CONS[typ]
         cell[6] = cell[6] + 1
         if cell[4] > 0 and cell[6] < CELL_AGES[typ] then
+
             if     typ == 1 then -- Leaf
                 local parent_idx = cell[7]
                 if MAP_TYPES[parent_idx] then
@@ -232,7 +233,7 @@ function tick()
                     death_idx = death_idx + 1 
                     BUFFER_DEATH[death_idx] = idx
                 end
-            
+
             elseif typ == 3 then -- Stem
                 local n = 1
                 local targets = {}
@@ -266,7 +267,7 @@ function tick()
                     sun_factor,
                 }
                 for j = 1, 4 do
-                    data[5 + j] = (MAP_TYPES[cell[6 + i]] or 0)
+                    data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
                 end
                 local action = ai_module.run(
                     CELL_GENOMES[cell[11]],
@@ -313,9 +314,10 @@ function tick()
                     update_idx = update_idx + 1
                     BUFFER_UPDATE[update_idx] = idx
                 elseif action == 3 then
-                    move_idx = move_idx + 2
-                    BUFFER_MOVING[move_idx - 1] = idx
-                    BUFFER_MOVING[move_idx] = target_idx
+                    move_idx = move_idx + 3
+                    BUFFER_MOVING[move_idx - 2] = idx
+                    BUFFER_MOVING[move_idx - 1] = target_idx
+                    BUFFER_MOVING[move_idx]     = i
                 elseif action == 4 then
                     cell[2] = 4
                     cell[5] = cell[5] + CELL_COSTS[5] - CELL_COSTS[4]
@@ -337,7 +339,7 @@ function tick()
                     sun_factor,
                 }
                 for j = 1, 4 do
-                    data[5 + j] = (MAP_TYPES[cell[6 + i]] or 0)
+                    data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
                 end
                 local res = ai_module.run(
                     CELL_GENOMES[cell[11]],
@@ -382,6 +384,8 @@ function tick()
             death_idx = death_idx + 1
             BUFFER_DEATH[death_idx] = idx
         end
+
+        ::continue::
     end
 
     for i = 1, death_idx do -- Killing cells
@@ -473,15 +477,17 @@ function tick()
         )
     end
 
-    for i = 1, move_idx, 2 do
+    for i = 1, move_idx, 3 do -- Moving cells
         local idx_from, idx_to = BUFFER_MOVING[i], BUFFER_MOVING[i + 1]
         local cell = MAP_CELLS[idx_from]
         if cell and not MAP_TYPES[idx_to] then
+            local queue_idx = BUFFER_MOVING[i + 2]
             cell[1] = idx_to
-            MAP_CELLS[idx_to]   = cell
-            MAP_TYPES[idx_to]   = cell[2]
-            MAP_CELLS[idx_from] = nil
-            MAP_TYPES[idx_from] = nil
+            MAP_CELLS[idx_to]     = cell
+            MAP_TYPES[idx_to]     = cell[2]
+            CELL_QUEUE[queue_idx] = idx_to
+            MAP_CELLS[idx_from]   = nil
+            MAP_TYPES[idx_from]   = nil
             local x, y = idx2pos(idx_to)
             local r, g, b = CELL_COLORS[cell[2]]
             cell_batch:setColor(r, g, b)
