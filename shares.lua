@@ -15,8 +15,8 @@ M.MINERALS_MAX = 256
 M.CELL_INIT_ENERGY   = 256.0
 M.CELL_INIT_MINERALS = 256.0
 
-M.LEAF_ENERGY_GEN   = 10
-M.ROOT_MINERAL_EXTR = 10
+M.LEAF_ENERGY_GEN   = 20
+M.ROOT_MINERAL_EXTR = 20
 
 M.CELL_AGES = {
     100, -- Leaf
@@ -28,21 +28,21 @@ M.CELL_AGES = {
 }
 
 M.CELL_ENERGY_CONS = {
-    0.5, -- Leaf
-    1.0, -- Root
-    1.0, -- Stem
-    0.2, -- Seed
-    2.0, -- Spore
-    3.0, -- Sprout
+    0.0, -- Leaf
+    0.0, -- Root
+    0.0, -- Stem
+    0.0, -- Seed
+    0.0, -- Spore
+    0.0, -- Sprout
 }
 
 M.CELL_COSTS = {
-    2.0,  -- Leaf
+    1.0,  -- Leaf
     1.0,  -- Root
     1.0,  -- Stem
-    10.0, -- Seed
-    15.0, -- Spore
-    5.0,  -- Sprout
+    3.0, -- Seed
+    2.0, -- Spore
+    2.0,  -- Sprout
 }
 
 M.CELL_COLORS = {
@@ -56,7 +56,7 @@ M.CELL_COLORS = {
 
 M.AI_LAYERS_SEED   = {9, 12, 1}
 M.AI_LAYERS_SPORE  = {6, 16, 1}
-M.AI_LAYERS_SPROUT = {9, 18, 3}
+M.AI_LAYERS_SPROUT = {9, 18, 16, 3}
 
 -- Cached data
 local floor = math.floor

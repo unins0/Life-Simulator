@@ -118,7 +118,7 @@ end
 
 function addCell(cell)
     local MAP_CELLS = shares.MAP_CELLS
-    if MAP_CELLS[cell[1]] then return false end
+    if not cell or MAP_CELLS[cell[1]] then return false end
     MAP_CELLS[cell[1]]        = cell
     shares.MAP_TYPES[cell[1]] = cell[2]
 
@@ -190,11 +190,11 @@ function tick()
 
     local BUFFER_ENERGY  = {}
     local BUFFER_MINERAL = {}
-    local BUFFER_EXTR    = {}
+    local BUFFER_EXTR    = {} -- {from, to, ...}
     local BUFFER_SPAWN   = {}
     local BUFFER_DEATH   = {}
     local BUFFER_UPDATE  = {}
-    local BUFFER_MOVING  = {} -- {from, to, queue_idx, ...}
+    local BUFFER_MOVING  = {} -- {from, to, ...}
     local extr_idx, spawn_idx   = 0, 0
     local death_idx, update_idx = 0, 0
     local move_idx = 0
@@ -227,8 +227,10 @@ function tick()
             elseif typ == 2 then -- Root
                 local parent_idx = cell[7]
                 if MAP_TYPES[parent_idx] then
-                    extr_idx = extr_idx + 1
-                    BUFFER_EXTR[extr_idx] = idx
+                    local x, y = idx2pos(idx)
+                    extr_idx = extr_idx + 2
+                    BUFFER_EXTR[extr_idx - 1] = pos2idx(x + rand(-1, 1), y + rand(-1, 1))
+                    BUFFER_EXTR[extr_idx]     = cell[7]
                 else
                     death_idx = death_idx + 1 
                     BUFFER_DEATH[death_idx] = idx
@@ -239,7 +241,8 @@ function tick()
                 local targets = {}
                 for j = 1, 3 do
                     local t_idx = cell[7 + j]
-                    if MAP_TYPES[t_idx] then 
+                    local target = MAP_TYPES[t_idx]
+                    if target and target > 2 then 
                         targets[n] = t_idx
                         n = n + 1
                     end
@@ -314,10 +317,9 @@ function tick()
                     update_idx = update_idx + 1
                     BUFFER_UPDATE[update_idx] = idx
                 elseif action == 3 then
-                    move_idx = move_idx + 3
-                    BUFFER_MOVING[move_idx - 2] = idx
-                    BUFFER_MOVING[move_idx - 1] = target_idx
-                    BUFFER_MOVING[move_idx]     = i
+                    move_idx = move_idx + 2
+                    BUFFER_MOVING[move_idx - 1] = idx
+                    BUFFER_MOVING[move_idx ]    = target_idx
                 elseif action == 4 then
                     cell[2] = 4
                     cell[5] = cell[5] + CELL_COSTS[5] - CELL_COSTS[4]
@@ -424,23 +426,31 @@ function tick()
     for i = 1, shares.MAP_SIZE do -- Resource transfering
         local energy   = (BUFFER_ENERGY[i]  or 0.0)
         local minerals = (BUFFER_MINERAL[i] or 0.0)
-        if energy ~= 0.0 and minerals ~= 0.0 then
+        if energy ~= 0.0 or minerals ~= 0.0 then
             local cell = MAP_CELLS[i]
             if cell then
                 cell[4] = cell[4] + energy
                 cell[5] = cell[5] + minerals
-            else print('Resource miss')
+            else
+                MAP_MINERALS[i] = MAP_MINERALS[i] + minerals
+                --[[print(
+                    'Resource miss\n' ..
+                    i, energy, minerals
+                )]]
             end
         end
     end
 
-    for i = 1, extr_idx do -- Mineral extraction
-        local idx  = BUFFER_EXTR[i]
-        local cell = MAP_CELLS[idx]
-        local minerals = math.min(MAP_MINERALS[idx], ROOT_MINERAL_EXTR)
-        MAP_MINERALS[idx] = MAP_MINERALS[idx] - minerals
-        cell[5] = cell[5] + minerals
-        updateMinerals(idx)
+    for i = 1, extr_idx, 2 do -- Mineral extraction
+        local extr_to = BUFFER_EXTR[i + 1]
+        local cell    = MAP_CELLS[extr_to]
+        if cell then
+            local extr_from = BUFFER_EXTR[i]
+            local minerals  = math.min(MAP_MINERALS[extr_from], ROOT_MINERAL_EXTR)
+            MAP_MINERALS[extr_from] = MAP_MINERALS[extr_from] - minerals
+            cell[5] = cell[5] + minerals
+            updateMinerals(extr_from)
+        end
     end
 
     for i = 1, spawn_idx do -- Cell spawning
@@ -477,33 +487,12 @@ function tick()
         )
     end
 
-    for i = 1, move_idx, 3 do -- Moving cells
+    for i = 1, move_idx, 2 do -- Moving cells
         local idx_from, idx_to = BUFFER_MOVING[i], BUFFER_MOVING[i + 1]
         local cell = MAP_CELLS[idx_from]
-        if cell and not MAP_TYPES[idx_to] then
-            local queue_idx = BUFFER_MOVING[i + 2]
+        if addCell(cell) then
             cell[1] = idx_to
-            MAP_CELLS[idx_to]     = cell
-            MAP_TYPES[idx_to]     = cell[2]
-            CELL_QUEUE[queue_idx] = idx_to
-            MAP_CELLS[idx_from]   = nil
-            MAP_TYPES[idx_from]   = nil
-            local x, y = idx2pos(idx_to)
-            local r, g, b = CELL_COLORS[cell[2]]
-            cell_batch:setColor(r, g, b)
-            cell_batch:set(
-                idx_to,
-                cell_sprites[cell[2]],
-                x,
-                y,
-                cell[3] / 2 * math.pi,
-                0.125,
-                0.125,
-                4, 4
-            )
-            local x, y = idx2pos(idx_from)
-            cell_batch:setColor(0.0, 0.5, 1.0, 0.1)
-            cell_batch:set(idx_from, cell_sprites[0], x, y, 0, 0.125, 0.125, 4, 4)
+            MAP_CELLS[idx_from] = nil
         end
     end
 
@@ -553,9 +542,12 @@ function love.draw()
 
     LG.translate(camera_x, camera_y)
     LG.scale(camera_zoom, camera_zoom)
-    LG.setColor(1.0, 1.0, 1.0)
 
+    local sf = sun_factor
+    LG.setColor(sf, sf, sf)
     LG.rectangle('fill', 0.5, 0.5, shares.MAP_WIDTH, shares.MAP_HEIGHT)
+
+    LG.setColor(1.0, 1.0, 1.0)
     LG.draw(cell_batch)
 
     if view_mode == 3 then LG.draw(mineral_batch) end
@@ -577,6 +569,7 @@ function love.draw()
             '\nStep: '   .. step ..
             '\nSun: '    .. string.format('%.2f', sun_factor) ..
             '\nCells: '  .. shares.CELL_COUNTER ..
+            '\nGenomes: '.. #shares.CELL_GENOMES ..
             '\nX, Y: '   .. highlight_x .. ' ' .. highlight_y ..
             '\nTarget: ' .. target_cell.x .. ' ' .. target_cell.y .. ' ' .. target_cell.idx,
             10, 10
@@ -601,7 +594,7 @@ function love.draw()
                 ' '            .. tostring(cell[8]) ..
                 ' '            .. tostring(cell[9]) ..
                 ' '            .. tostring(cell[10]),
-                10, 115
+                10, 130
             )
         end
 

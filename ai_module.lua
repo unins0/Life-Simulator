@@ -71,8 +71,8 @@ function M.run(weights, layers, idx_offset, inputs)
                 data[ofs] = (data[ofs] or 0.0) + value * weights[idx + k + 2]
             end
             idx = idx + layer + 3
-            offset = next_offset
         end
+        offset = next_offset
     end
 
     local result = {}
