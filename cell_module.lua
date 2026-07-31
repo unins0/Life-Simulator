@@ -47,6 +47,11 @@ function M.initCell(typ, x, y, direction, args)
             genome = ai_module.mutateWeights(genome)
         end
         cell[11] = genome
+        -- BUG-1 (genome aliasing): the cell owns its reference from the moment of
+        -- creation. acquire() bumps the slot counter right here, before any
+        -- addCell, so a second mutating AI child spawned by the same Sprout
+        -- cannot have addGenome reuse this slot (counter == 0) and overwrite it.
+        ai_module.acquire(genome)
     end
 
     return cell

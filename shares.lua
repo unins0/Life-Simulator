@@ -76,6 +76,8 @@ M.AI_LEN_SPORE  = countWeights(M.AI_LAYERS_SPORE)
 M.AI_LEN_SPROUT = countWeights(M.AI_LAYERS_SPROUT)
 M.AI_LEN_COMMON = M.AI_LEN_SEED + M.AI_LEN_SPORE + M.AI_LEN_SPROUT
 
+-- AI_OFFSET_* — start of each network's weights in the shared table
+-- (size AI_LEN_COMMON = SEED + SPORE + SPROUT); run() reads at offset+1.
 M.AI_OFFSET_SEED   = 0
 M.AI_OFFSET_SPORE  = M.AI_LEN_SEED
 M.AI_OFFSET_SPROUT = M.AI_LEN_SEED + M.AI_LEN_SPORE
@@ -85,6 +87,7 @@ M.CELL_NAMES = {'Leaf', 'Root', 'Stem', 'Seed', 'Spore', 'Sprout'}
 M.MAP_CELLS      = {}
 M.MAP_TYPES      = {}
 M.MAP_MINERALS   = {}
+M.MAP_ENERGY     = {}
 M.CELL_GENOMES   = {}
 M.CELL_QUEUE     = {}
 M.CELL_COUNTER   = 0
