@@ -1,0 +1,164 @@
+// forward_packed.comp — packed fp8/fp4/fp2 quantized forward pass.
+//
+// shader_abi: 2
+//
+// Shader ABI (nn/vulkan): bump SHADER_ABI on any breaking change to the
+// binding table, config SSBO layout or decode semantics. nn/vulkan_pipelines
+// keys pipelines by quant ABI version and refuses stale shader binaries.
+//
+// Bindings (all std430 storage buffers):
+//   0 input    float[]   — per-cell inputs (in_f[iBase + cell*inputStride + k])
+//   1 payload  uint[]    — quantized weights, WORD-ADDRESSED (see loadByte)
+//   2 scale    float[]   — per-block scale  (scales[sBase + block])
+//   3 offset   float[]   — per-block offset (offsets[oBase + block])
+//   4 special  float[]   — per node: {bias, threshold, dead} at special[spBase + 3*node + {0,1,2}]
+//   5 output   float[]   — per-cell outputs (out_f[outBase + cell*outputStride + node])
+//   6 config   uint[]    — network layout for this dispatch
+//
+// Config SSBO (binding 6) layout (per-cell bases — each batch row carries its
+// own genome entry, so a batch with different per-cell genomes reads the
+// right weights for EVERY cell):
+//   cfg[0] = numNodes            number of neurons computed by this dispatch
+//   cfg[1] = fanIn               inputs per neuron (dense layer model)
+//   cfg[2] = inputStride         float stride between cells in the input buffer
+//   cfg[3] = outputStride        float stride between cells in the output buffer
+//   cfg[4] = numCells            number of cells in this batch
+//   cfg[5] = flags               bit 0: activate the input layer (reference
+//                                semantics: bias/threshold/dead on the first
+//                                layer's input nodes, first dispatch only)
+//   cfg[6] = inputBase           float index base into input arena for cell 0
+//   cfg[7] = outputBase          float index base into output arena for cell 0
+//   cfg[8 + cell*4 + 0] = payloadBase[cell]   BYTE offset of this cell's entry
+//   cfg[8 + cell*4 + 1] = scaleBase[cell]     float index base into scale arena
+//   cfg[8 + cell*4 + 2] = offsetBase[cell]    float index base into offset arena
+//   cfg[8 + cell*4 + 3] = specialBase[cell]   float index base into special arena
+//
+//   When the input-activation flag is set, the specials entry starts with the
+//   INPUT nodes' {bias, threshold, dead} (special[spBase + 3*k + {0,1,2}] for
+//   input node k), followed by the computed output nodes' specials at
+//   special[spBase + 3*fanIn + 3*node + {0,1,2}].
+//
+// Specialization constants:
+//   FORMAT        (id 0) 0 = fp8, 1 = fp4, 2 = fp2
+//   BLOCK_LOG2    (id 1) log2 of uniform block size (3,4,5,6 -> 8/16/32/64)
+//   COMPUTE_FORMAT (id 2) 0 = fp32, 1 = fp16 (informational: fp16 arithmetic
+//                         requires VK_KHR_shader_float16_int8; packed path runs fp32)
+//
+// Decode model (uniform per-network, see nn/vulkan_pipelines): the payload
+// stores each layer matrix INPUT-MAJOR — flat index (input_node * output_count
+// + output_node), exactly the format.decompose layout — so the weight for
+// (input node k, output node node) is:
+//   logicalIndex  = k * numNodes + node   (input-major flat weight index)
+//   block         = logicalIndex >> blockLog2
+//   inBlock       = logicalIndex & ((1 << blockLog2) - 1)
+//   fp8: byteValue = loadByte(payloadBase + logicalIndex); q = int(byteValue) - 128;
+//        weight = scales[scaleBase + block] * float(q);
+//   fp4: byteIndex = logicalIndex >> 1; shift = (logicalIndex & 1) << 2;
+//        q = (loadByte(payloadBase + byteIndex) >> shift) & 0xF;
+//        weight = offsets[offsetBase + block] + scales[scaleBase + block] * float(q);
+//   fp2: byteIndex = logicalIndex >> 2; shift = (logicalIndex & 3) << 1;
+//        q = (loadByte(payloadBase + byteIndex) >> shift) & 0x3;
+//        weight = offsets[offsetBase + block] + scales[scaleBase + block] * float(q);
+
+#version 450
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer Input   { float in_f[]; } input_buf;
+layout(std430, binding = 1) readonly buffer Payload { uint payload_u[]; } payload;
+layout(std430, binding = 2) readonly buffer Scales  { float scales[]; } scale_buf;
+layout(std430, binding = 3) readonly buffer Offsets { float offsets[]; } offset_buf;
+layout(std430, binding = 4) readonly buffer Special { float special[]; } special_buf;
+layout(std430, binding = 5) buffer Output { float out_f[]; } output_buf;
+layout(std430, binding = 6) readonly buffer Config { uint cfg[]; } config_buf;
+
+layout(constant_id = 0) const int FORMAT = 0;        // fp8
+layout(constant_id = 1) const int BLOCK_LOG2 = 3;    // block size 8
+layout(constant_id = 2) const int COMPUTE_FORMAT = 0; // fp32 compute
+
+// Word-addressed byte load. Core Vulkan 1.2 does not guarantee byte-addressable
+// uint8 SSBO, so the payload is a uint[] and bytes are extracted per-word:
+//   byte at addr = (payload_u[addr >> 2] >> ((addr & 3) << 3)) & 0xFF   (little-endian)
+// The optional VK_KHR_shader_8bit_storage path must produce identical bytes.
+uint loadByte(uint byteAddr) {
+    return (payload.payload_u[byteAddr >> 2u] >> ((byteAddr & 3u) << 3u)) & 0xFFu;
+}
+
+void main() {
+    uint cell = gl_GlobalInvocationID.x;
+    uint numCells     = config_buf.cfg[4];
+    if (cell >= numCells) {
+        return; // dispatch is padded to a multiple of 64; skip overrun cells
+    }
+    uint numNodes     = config_buf.cfg[0];
+    uint fanIn        = config_buf.cfg[1];
+    uint inputStride  = config_buf.cfg[2];
+    uint outputStride = config_buf.cfg[3];
+    uint flags        = config_buf.cfg[5];
+    uint iBase        = config_buf.cfg[6]; // input float index (cell 0)
+    uint outBase      = config_buf.cfg[7]; // output float index (cell 0)
+    bool activateInput = (flags & 1u) != 0u;
+    // Per-cell (per-genome) base offsets — one set per batch row.
+    uint rowBase   = 8u + cell * 4u;
+    uint pBase     = config_buf.cfg[rowBase + 0u]; // payload byte offset
+    uint sBase     = config_buf.cfg[rowBase + 1u]; // scale float index
+    uint oBase     = config_buf.cfg[rowBase + 2u]; // offset float index
+    uint spBase    = config_buf.cfg[rowBase + 3u]; // special float index
+    // Output-node specials follow the input-node specials when input-layer
+    // activation is enabled (first-layer dispatch only).
+    uint outSpec = activateInput ? spBase + 3u * fanIn : spBase;
+
+    for (uint node = 0u; node < numNodes; node++) {
+        float acc = 0.0;
+        for (uint k = 0u; k < fanIn; k++) {
+            // Reference input-layer activation: the first dispatch activates
+            // the input nodes (bias/threshold/dead) exactly like the CPU path.
+            float x = input_buf.in_f[iBase + cell * inputStride + k];
+            if (activateInput) {
+                float xbias      = special_buf.special[spBase + 3u * k + 0u];
+                float xthreshold = special_buf.special[spBase + 3u * k + 1u];
+                float xdead      = special_buf.special[spBase + 3u * k + 2u];
+                float xv = x + xbias;
+                if (xv <= xthreshold) { xv = xdead; }
+                x = xv;
+            }
+            // Input-major flat weight index: input node k, output node node.
+            // (matches the format.decompose payload layout — the CPU path
+            // reads w[(k-1)*out_c + node], this is its 0-based twin)
+            uint logicalIndex = k * numNodes + node;
+            uint block = logicalIndex >> BLOCK_LOG2;
+            uint inBlock = logicalIndex & ((1u << BLOCK_LOG2) - 1u);
+            float weight;
+            if (FORMAT == 0) {
+                // fp8: signed byte, per-block scale.
+                int q = int(loadByte(pBase + logicalIndex)) - 128;
+                weight = scale_buf.scales[sBase + block] * float(q);
+            } else if (FORMAT == 1) {
+                // fp4: two weights per byte, low nibble first (little-endian bit order).
+                uint byteIndex = logicalIndex >> 1u;
+                uint shift = (logicalIndex & 1u) << 2u;
+                uint q = (loadByte(pBase + byteIndex) >> shift) & 0xFu;
+                weight = offset_buf.offsets[oBase + block] + scale_buf.scales[sBase + block] * float(q);
+            } else {
+                // fp2: four weights per byte, low bits first.
+                uint byteIndex = logicalIndex >> 2u;
+                uint shift = (logicalIndex & 3u) << 1u;
+                uint q = (loadByte(pBase + byteIndex) >> shift) & 0x3u;
+                weight = offset_buf.offsets[oBase + block] + scale_buf.scales[sBase + block] * float(q);
+            }
+            acc += weight * x;
+        }
+        // Per-node activation. The dead-zone comparison is INCLUSIVE:
+        //   value = value + bias;
+        //   if (value <= threshold) { value = dead; }
+        // This is '<=' and NOT '<'-only — a test greps this file for
+        // 'value <= threshold' and for 'not <'. See tests/test_vulkan_skeleton.lua.
+        float value     = acc + special_buf.special[outSpec + 3u * node + 0u];
+        float threshold = special_buf.special[outSpec + 3u * node + 1u];
+        float dead      = special_buf.special[outSpec + 3u * node + 2u];
+        if (value <= threshold) {
+            value = dead;
+        }
+        output_buf.out_f[outBase + cell * outputStride + node] = value;
+    }
+}

@@ -1,0 +1,74 @@
+// forward_fp16.comp — direct fp16 forward pass (STUB / not enabled by default).
+//
+// shader_abi: 2
+//
+// REQUIRES VK_KHR_shader_float16_int8 (native fp16 ARITHMETIC). This extension
+// is NOT enabled by default in nn/vulkan — presence of VK_KHR_16bit_storage
+// alone authorizes only fp16 STORAGE, not arithmetic. See nn/vulkan.lua
+// capabilities (f16_storage vs f16_arithmetic).
+//
+// The production path is forward_packed.comp (fp8/fp4/fp2 with fp32 compute).
+// This file documents the fp16 variant: identical layout to forward_fp32.comp
+// (incl. the per-cell config bases and input-layer activation flag) with
+// float16_t weights/accumulator.
+
+#version 450
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer Input   { float16_t in_f[]; } input_buf;
+layout(std430, binding = 1) readonly buffer Payload { float16_t payload_f[]; } payload;
+layout(std430, binding = 2) readonly buffer Scales  { float16_t scales[]; } scale_buf;
+layout(std430, binding = 3) readonly buffer Offsets { float16_t offsets[]; } offset_buf;
+layout(std430, binding = 4) readonly buffer Special { float16_t special[]; } special_buf;
+layout(std430, binding = 5) buffer Output { float16_t out_f[]; } output_buf;
+layout(std430, binding = 6) readonly buffer Config { uint cfg[]; } config_buf;
+
+layout(constant_id = 0) const int FORMAT = 0;         // unused by fp16 path (kept for ABI)
+layout(constant_id = 1) const int BLOCK_LOG2 = 3;     // unused by fp16 path (kept for ABI)
+layout(constant_id = 2) const int COMPUTE_FORMAT = 1; // fp16 compute
+
+void main() {
+    uint cell = gl_GlobalInvocationID.x;
+    uint numCells     = config_buf.cfg[4];
+    if (cell >= numCells) {
+        return; // dispatch is padded to a multiple of 64; skip overrun cells
+    }
+    uint numNodes     = config_buf.cfg[0];
+    uint fanIn        = config_buf.cfg[1];
+    uint inputStride  = config_buf.cfg[2];
+    uint outputStride = config_buf.cfg[3];
+    uint flags        = config_buf.cfg[5];
+    uint iBase        = config_buf.cfg[6]; // input float index (cell 0)
+    uint outBase      = config_buf.cfg[7]; // output float index (cell 0)
+    bool activateInput = (flags & 1u) != 0u;
+    uint rowBase = 8u + cell * 4u;
+    uint pBase   = config_buf.cfg[rowBase + 0u]; // BYTE offset; float index = pBase >> 2
+    uint spBase  = config_buf.cfg[rowBase + 3u]; // special FLOAT index
+    uint outSpec = activateInput ? spBase + 3u * fanIn : spBase;
+
+    for (uint node = 0u; node < numNodes; node++) {
+        float16_t acc = float16_t(0.0);
+        for (uint k = 0u; k < fanIn; k++) {
+            float16_t x = input_buf.in_f[iBase + cell * inputStride + k];
+            if (activateInput) {
+                float16_t xbias      = special_buf.special[spBase + 3u * k + 0u];
+                float16_t xthreshold = special_buf.special[spBase + 3u * k + 1u];
+                float16_t xdead      = special_buf.special[spBase + 3u * k + 2u];
+                float16_t xv = x + xbias;
+                if (xv <= xthreshold) { xv = xdead; }
+                x = xv;
+            }
+            uint logicalIndex = k * numNodes + node; // input-major (format.decompose layout)
+            acc += payload.payload_f[(pBase >> 2u) + logicalIndex] * x;
+        }
+        float16_t value     = acc + special_buf.special[outSpec + 3u * node + 0u];
+        float16_t threshold = special_buf.special[outSpec + 3u * node + 1u];
+        float16_t dead      = special_buf.special[outSpec + 3u * node + 2u];
+        if (value <= threshold) {   // inclusive dead-zone: NOT '<'-only
+            value = dead;
+        }
+        output_buf.out_f[outBase + cell * outputStride + node] = value;
+    }
+}
