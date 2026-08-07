@@ -361,11 +361,17 @@ function Runtime:_forward_cpu(network_id, weights, inputs, out, precision, use_c
     if use_cache then
         key = genome_key(weights, self:_profile_key(network_id, precision, block_size))
         packed = self._pack_cache[key]
+        if packed then
+            self.metrics['pack cache hits'] = (self.metrics['pack cache hits'] or 0) + 1
+        end
     end
     if not packed then
         packed, err = self:_pack(network_id, stream, precision, block_size)
         if not packed then return nil, err end
-        if use_cache then self._pack_cache[key] = packed end
+        if use_cache then
+            self.metrics['pack cache misses'] = (self.metrics['pack cache misses'] or 0) + 1
+            self._pack_cache[key] = packed
+        end
     end
     local out_count = self.networks[network_id].layers[#self.networks[network_id].layers]
     for i = 1, out_count do out[i] = 0 end
@@ -386,6 +392,7 @@ function Runtime:forward(network_id, weights, inputs)
         return nil, errors.new('INVALID_ARGUMENT',
             ('unknown network %q'):format(tostring(network_id)), self.backend)
     end
+    self.metrics['forward calls'] = (self.metrics['forward calls'] or 0) + 1
     if self.backend == 'gpu' then
         local out = {}
         local ok, err = self:_forward_gpu(network_id, weights, inputs, nil, self.precision)
@@ -409,6 +416,7 @@ function Runtime:forward_into(network_id, weights, inputs, out)
     if type(out) ~= 'table' then
         return nil, errors.new('INVALID_ARGUMENT', 'out must be a Lua table', self.backend)
     end
+    self.metrics['forward calls'] = (self.metrics['forward calls'] or 0) + 1
     if self.backend == 'gpu' then
         local res, err = self:_forward_gpu(network_id, weights, inputs, out, self.precision)
         if not res then return nil, err end
@@ -448,6 +456,7 @@ function Runtime:forward_batch(network_id, batch_items, in_desc, out_desc)
     end
     local in_buf = in_desc.buffer
     local out_buf = out_desc.buffer
+    self.metrics['forward batch calls'] = (self.metrics['forward batch calls'] or 0) + 1
 
     if self.backend == 'gpu' then
         local ok, err = self:_forward_batch_gpu(network_id, batch_items, in_desc, out_desc)
@@ -470,7 +479,10 @@ function Runtime:forward_batch(network_id, batch_items, in_desc, out_desc)
         if not stream then return nil, err end
         local key = genome_key(item_weights, self:_profile_key(item_net, precision, block_size))
         local packed = self._pack_cache[key]
-        if not packed then
+        if packed then
+            self.metrics['pack cache hits'] = (self.metrics['pack cache hits'] or 0) + 1
+        else
+            self.metrics['pack cache misses'] = (self.metrics['pack cache misses'] or 0) + 1
             packed, err = self:_pack(item_net, stream, precision, block_size)
             if not packed then return nil, err end
             self._pack_cache[key] = packed
@@ -758,11 +770,15 @@ function Runtime:_gpu_forward(network_id, items, precision)
             local class = sres.err_class or 'VULKAN_PIPELINE_FAILED'
             return nil, errors.new(class, sres.message or 'GPU dispatch failed', 'gpu')
         end
+        local t0 = os.clock()
         local waited = w:wait(batch.tick_id, batch.model_hash)
         local res
         for _, r in ipairs(waited or {}) do
             if r.tick_id == batch.tick_id then res = r break end
         end
+        local dt = os.clock() - t0
+        self.metrics['gpu dispatch count'] = (self.metrics['gpu dispatch count'] or 0) + 1
+        self.metrics['gpu dispatch time'] = (self.metrics['gpu dispatch time'] or 0) + dt
         if not res then
             return nil, errors.new('VULKAN_PIPELINE_FAILED',
                 'no worker result for dispatched tick', 'gpu')

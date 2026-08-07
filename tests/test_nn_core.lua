@@ -918,6 +918,48 @@ tests['precision-switch cost metric'] = function()
         :format(tostring(r.metrics['precision-switch cost'])))
 end
 
+-- Forward / forward_batch / pack-cache counters increment at the public
+-- boundaries and never alter results.
+tests['forward and cache metrics increment'] = function()
+    local g1 = make_genome(61)
+    local g2 = make_genome(62)
+    local r = nn.new({ backend = 'cpu', deterministic = true, precision = 'fp8' })
+    local inputs = { 1, 2, 3, 4, 5, 6, 7, 8, 9 }
+
+    r:forward('seed', g1, inputs)
+    r:forward('seed', g2, inputs)
+    assert(r.metrics['forward calls'] == 2,
+        ('forward calls must equal 2, got %s'):format(tostring(r.metrics['forward calls'])))
+
+    local in_buf, out_buf = {}, { 0, 0 }
+    for _ = 1, 2 do
+        for _, v in ipairs(inputs) do in_buf[#in_buf + 1] = v end
+    end
+    local before_batch = r.metrics['forward batch calls'] or 0
+    r:forward_batch('seed', {
+        { genome = g1, network_id = 'seed' },
+        { genome = g2, network_id = 'seed' },
+    }, { buffer = in_buf, stride = 9, count = 2, element_type = 'fp32' },
+       { buffer = out_buf, stride = 1, count = 2, element_type = 'fp32' })
+    assert(r.metrics['forward batch calls'] == before_batch + 1,
+        'forward_batch calls must increment')
+
+    -- Первый прогон новых геномов через batch = 2 промаха; повтор = 2 попадания.
+    assert((r.metrics['pack cache misses'] or 0) >= 2,
+        'first batch of fresh genomes must miss the cache')
+    local misses = r.metrics['pack cache misses'] or 0
+    local hits = r.metrics['pack cache hits'] or 0
+    r:forward_batch('seed', {
+        { genome = g1, network_id = 'seed' },
+        { genome = g2, network_id = 'seed' },
+    }, { buffer = in_buf, stride = 9, count = 2, element_type = 'fp32' },
+       { buffer = out_buf, stride = 1, count = 2, element_type = 'fp32' })
+    assert((r.metrics['pack cache hits'] or 0) == hits + 2,
+        'repeated batch must hit the cache twice')
+    assert(r.metrics['pack cache misses'] == misses,
+        'repeated batch must not miss again')
+end
+
 -- Optional real-GPU forward when Vulkan + compiled .spv exist.
 tests['optional real-GPU forward (packed, per-layer dispatch)'] = function()
     if not ffi then
