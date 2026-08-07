@@ -233,6 +233,43 @@ tests['run matches reference implementation'] = function()
 end
 
 -- ---------------------------------------------------------------------------
+-- 6b. run_into пишет в caller-provided таблицу: идентичность сохраняется,
+-- результат совпадает с run() (1e-9), повторные вызовы перезаписывают.
+-- ---------------------------------------------------------------------------
+tests['run_into writes into a caller-provided table'] = function()
+    math.randomseed(42)
+    local slot   = ai_module.genWeights()
+    local genome = H.dataCopy(slot)
+
+    local out = {999, 999, 999}
+    local inputs = {0.3, -0.4, 0.9, 0.1, -0.7}
+
+    local expect = ai_module.run(shares.CELL_GENOMES[slot],
+        shares.AI_LAYERS_SPROUT, shares.AI_OFFSET_SPROUT, inputs)
+    local got = ai_module.run_into(shares.CELL_GENOMES[slot],
+        shares.AI_LAYERS_SPROUT, shares.AI_OFFSET_SPROUT, inputs, out)
+
+    assert(got == out, 'run_into must return the caller-provided table')
+    H.assertClose(got, expect, 1e-9, 'run_into vs run (sprout)')
+
+    -- Повторный вызов с тем же out перезаписывает, а не накапливает.
+    local expect2 = ai_module.run(shares.CELL_GENOMES[slot],
+        shares.AI_LAYERS_SPROUT, shares.AI_OFFSET_SPROUT, {0.8, 0.2, -0.3, 0.6, 0.4})
+    local got2 = ai_module.run_into(shares.CELL_GENOMES[slot],
+        shares.AI_LAYERS_SPROUT, shares.AI_OFFSET_SPROUT, {0.8, 0.2, -0.3, 0.6, 0.4}, out)
+    H.assertClose(got2, expect2, 1e-9, 'run_into vs run (sprout, reused out)')
+
+    -- run() по-прежнему возвращает свежую таблицу: мутация результата со стороны
+    -- вызывающего не влияет на последующие вызовы run().
+    local a = ai_module.run(shares.CELL_GENOMES[slot],
+        shares.AI_LAYERS_SEED, shares.AI_OFFSET_SEED, {0.5, 0.5, 0.5})
+    a[1] = 1234
+    local b = ai_module.run(shares.CELL_GENOMES[slot],
+        shares.AI_LAYERS_SEED, shares.AI_OFFSET_SEED, {0.5, 0.5, 0.5})
+    assert(b[1] ~= 1234, 'run() result must not leak across calls')
+end
+
+-- ---------------------------------------------------------------------------
 -- 7. Synthetic genome — точные значения.
 -- Раскладка весов: на каждый НЕ-выходной узел (bias, threshold, dead, *веса в
 -- следующий слой), на выходной узел (bias, threshold, dead).

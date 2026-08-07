@@ -124,7 +124,7 @@ end
 -- stay exact. result is still a fresh table — never the shared scratch.
 local data_scratch_t = {}
 
-local function run_table(weights, layers, idx_offset, inputs)
+local function run_table(weights, layers, idx_offset, inputs, out)
     local len    = #layers
     local idx    = 1 + idx_offset
     local offset = 0
@@ -154,7 +154,7 @@ local function run_table(weights, layers, idx_offset, inputs)
         offset = next_offset
     end
 
-    local result = {}
+    local result = out or {}
     for i = 1, layers[len] do
         local value = data[offset + i] + (w[idx] or 0)
         if value <= (w[idx + 1] or 0) then
@@ -198,7 +198,7 @@ local function mutateWeights_ffi(genome_idx, strenght)
     return addGenome({data = new_data, is_ffi = true})
 end
 
-local function run_ffi(weights, layers, idx_offset, inputs)
+local function run_ffi(weights, layers, idx_offset, inputs, out)
     local len    = #layers
     local idx    = 1 + idx_offset
     local offset = 0
@@ -238,8 +238,9 @@ local function run_ffi(weights, layers, idx_offset, inputs)
         offset = next_offset
     end
 
-    -- Fresh Lua table — never the shared scratch (callers keep the reference).
-    local result = {}
+    -- Caller-provided out or a fresh Lua table (callers that retain may keep
+    -- the reference; reuse never escapes a single caller's ownership).
+    local result = out or {}
     for i = 1, layers[len] do
         local value = data[offset + i - 1] + w[idx - 1]
         if value <= w[idx] then
@@ -255,5 +256,11 @@ end
 M.genWeights    = HAS_FFI and genWeights_ffi or genWeights_table
 M.mutateWeights = HAS_FFI and mutateWeights_ffi or mutateWeights_table
 M.run           = HAS_FFI and run_ffi or run_table
+-- run_into writes into a caller-provided `out` (run() allocates a fresh one),
+-- so the game can reuse a per-tick result table instead of allocating per call.
+local run_backend = HAS_FFI and run_ffi or run_table
+function M.run_into(weights, layers, idx_offset, inputs, out)
+    return run_backend(weights, layers, idx_offset, inputs, out)
+end
 
 return M

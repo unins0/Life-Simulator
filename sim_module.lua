@@ -184,6 +184,9 @@ function M.tick(state, view)
     end
     -- One reusable input table for all ai_module.run calls this tick.
     local data = {}
+    -- Reusable result table: every run_into result is consumed within the
+    -- same tick before the next run_into overwrites it.
+    local ai_out = {}
 
     state.step = state.step + 1
     state.sun_factor = M.calcSunFactor(state, state.step)
@@ -261,11 +264,12 @@ function M.tick(state, view)
                     data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
                 end
                 ai_calls = ai_calls + 1
-                local action = ai_module.run(
+                local action = ai_module.run_into(
                     CELL_GENOMES[cell[11]],
                     AI_LAYERS_SEED,
                     AI_OFFSET_SEED,
-                    data
+                    data,
+                    ai_out
                 )[1]
                 if action > 0.0 then
                     cell[2] = 6
@@ -290,11 +294,12 @@ function M.tick(state, view)
                 data[5] = state.sun_factor
                 data[6] = target_type or 0
                 ai_calls = ai_calls + 1
-                local action = floor(ai_module.run(
+                local action = floor(ai_module.run_into(
                     CELL_GENOMES[cell[11]],
                     AI_LAYERS_SPORE,
                     AI_OFFSET_SPORE,
-                    data
+                    data,
+                    ai_out
                 )[1]) % 5
                 if     action == 1 then
                     cell[3] = (cell[3] - 1) % 4
@@ -330,11 +335,12 @@ function M.tick(state, view)
                     data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
                 end
                 ai_calls = ai_calls + 1
-                local res = ai_module.run(
+                local res = ai_module.run_into(
                     CELL_GENOMES[cell[11]],
                     AI_LAYERS_SPROUT,
                     AI_OFFSET_SPROUT,
-                    data
+                    data,
+                    ai_out
                 )
                 local n = 0
                 local shared_energy = cell[4] / 4
