@@ -34,8 +34,6 @@ local PRECISIONS = { fp32 = true, fp16 = true, fp8 = true, fp4 = true, fp2 = tru
 local PACKED_FORMATS = { fp8 = true, fp4 = true, fp2 = true }
 local GATE_THRESHOLDS = corpus_mod.GATE_THRESHOLDS
 
-local floor = math.floor
-
 -- ------------------------------------------------------------- FNV-ish hash --
 -- Deterministic string hash (arithmetic-only: LuaJIT bitwise ops are signed
 -- int32, so plain arithmetic keeps both interpreters byte-identical).
@@ -47,13 +45,6 @@ local function hash_string(s)
     return h
 end
 Runtime.hash_string = hash_string
-
-local function num_key(x)
-    if x ~= x then return 'nan' end
-    if x == math.huge then return 'inf' end
-    if x == -math.huge then return '-inf' end
-    return ('%.17g'):format(x)
-end
 
 -- ------------------------------------------------------------ weight blobs --
 
@@ -579,10 +570,8 @@ end
 function Runtime:shutdown()
     if self._shutdown then return end
     if self.backend == 'gpu' and self._worker then
-        local ok = pcall(self._worker.shutdown, self._worker)
-        if not ok then
-            -- Worker teardown may be partially complete; best-effort.
-        end
+        -- Worker teardown may be partially complete; best-effort.
+        pcall(self._worker.shutdown, self._worker)
         self._worker = nil
     end
     self._shutdown = true

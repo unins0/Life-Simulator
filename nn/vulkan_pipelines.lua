@@ -319,7 +319,7 @@ function _M.update_descriptor_set(ctx, set, buffers)
     for i = 0, 6 do
         binfo[i].buffer = buffers[i + 1]
         binfo[i].offset = 0
-        binfo[i].range = VK.VK_WHOLE_SIZE -- VK_WHOLE_SIZE (rest of the buffer)
+        binfo[i].range = VK.VK_WHOLE_SIZE -- rest of the buffer
         writes[i].sType = VK.STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
         writes[i].dstSet = set
         writes[i].dstBinding = i

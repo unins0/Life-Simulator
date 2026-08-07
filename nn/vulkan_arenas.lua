@@ -244,7 +244,7 @@ end
 -- arena at `base`. No-op when the arena is not host-visible.
 function Arena:write(base, data, len)
     if not self.mapped then return end
-    local n = len or (type(data) == 'string' and #data or #data)
+    local n = len or #data
     if type(data) == 'string' then
         ffi.copy(self.mapped + base, data, n)
     else
@@ -424,7 +424,7 @@ function ArenaSet:stage(genome_id, profile, item)
     if not scale_base then return nil, err end
     scale:write_f32(scale_base, item.scales, #item.scales)
 
-    local offset_base, offs = 0
+    local offset_base = 0
     if item.offsets and #item.offsets > 0 then
         offset_base, err = offset:alloc(#item.offsets * 4, 4)
         if not offset_base then return nil, err end

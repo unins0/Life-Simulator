@@ -335,14 +335,12 @@ function M.write(header, records, payloads)
 
     -- 4. Payload region: emit with explicit zero-fill of alignment gaps.
     local pos = 0
-    local written = {}
     for _, rec in ipairs(tensor_recs) do
         local blob = payloads[rec.tensor_id] or ''
         local gap = rec.byte_offset - pos
         if gap > 0 then out = out .. string.rep('\0', gap) end
         out = out .. blob
         pos = rec.byte_offset + #blob
-        written[rec.tensor_id] = true
     end
     -- Any trailing alignment slack beyond the last payload is explicit zeros.
     -- (pos == payload_end by construction.)
@@ -595,10 +593,8 @@ function M.read(bytes)
     end
 
     -- Cross-record reference validation.
-    local bq = {}
     for _, rec in ipairs(records) do
         if rec.type == M.RECORD_BLOCK_QUANT then
-            bq[rec.source_tensor_id] = rec
             if not tensors[rec.source_tensor_id] then
                 return nil, errors.new('INVALID_SERIALIZATION',
                     'block quant references a missing source tensor')

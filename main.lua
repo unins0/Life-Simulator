@@ -98,20 +98,6 @@ function initMineralBatch()
 end
 
 function love.load()
-    --[[function update_minerals()
-        local sx, sy = math.max(math.floor(-camera_x / camera_zoom), 1), math.max(math.floor(-camera_y / camera_zoom), 1)
-        local w, h = math.min(math.ceil(screen_width / camera_zoom) + sx, MAP_WIDTH), math.min(math.ceil(screen_height / camera_zoom) + sy, MAP_HEIGHT)
-        for y = sy, h do
-            for x = sx, w do
-                local c
-                local idx = pos2idx(x, y)
-                if Map.minerals[idx] then c = Map.minerals[idx] / MINERALS_MAX else c = 0.0 end
-                mineral_batch:setColor(0.0, 0.0, 1.0, c)
-                mineral_batch:set(idx, x + 3.5, y + 3.5, 0, 1, 1, 4, 4)
-            end
-        end
-    end]]
-
     local cell_atlas = LG.newImage('cell_sprites.png')
     cell_atlas:setFilter('nearest')
     cell_sprites = {}
@@ -241,5 +227,4 @@ function love.keypressed(key, scancode, isrepeat)
 end
 
 function love.quit()
-    -- Just for case
 end

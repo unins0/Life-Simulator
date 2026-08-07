@@ -102,8 +102,6 @@ function corpus.record(inputs, reference_actions, outputs, network_ids, topology
     return { data = data, hash = corpus.hash(data) }
 end
 
--- ------------------------------------------------------------------- gates --
-
 local function sign_of(x)
     if x ~= x then return 0 end
     if x > 0 then return 1 end

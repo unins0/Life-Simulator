@@ -140,13 +140,11 @@ local function run_table(weights, layers, idx_offset, inputs)
         local prev_layer  = layers[i - 1]
         local next_offset = offset + prev_layer
         for j = 1, prev_layer do
-            -- Calculating value
             local value = (data[j + offset] or 0.0) + (w[idx] or 0)
             if value <= (w[idx + 1] or 0) then
                 value = w[idx + 2] or 0
             end
 
-            -- Applying weights to the following nodes
             for k = 1, layer do
                 local ofs = next_offset + k
                 data[ofs] = (data[ofs] or 0.0) + value * (w[idx + k + 2] or 0)
@@ -226,13 +224,11 @@ local function run_ffi(weights, layers, idx_offset, inputs)
         local prev_layer  = layers[i - 1]
         local next_offset = offset + prev_layer
         for j = 1, prev_layer do
-            -- Calculating value
             local value = data[j + offset - 1] + w[idx - 1]
             if value <= w[idx] then
                 value = w[idx + 1]
             end
 
-            -- Applying weights to the following nodes
             for k = 1, layer do
                 local ofs = next_offset + k - 1
                 data[ofs] = data[ofs] + value * w[idx + k + 1]

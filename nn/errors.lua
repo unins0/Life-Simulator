@@ -28,7 +28,6 @@ M.CLASSES = {
     ABI_MISMATCH                = 'ABI_MISMATCH',
 }
 
--- Build a structured error value.
 function M.new(class, message, backend)
     return {
         class = class or 'INVALID_ARGUMENT',

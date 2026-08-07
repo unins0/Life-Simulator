@@ -1257,10 +1257,8 @@ function _M.destroy(ctx)
     local fn = ctx.fn and ctx.fn.device
     if fn then
         if fn.deviceWaitIdle then
-            local ok = pcall(fn.deviceWaitIdle, ctx.device)
-            if not ok then
-                -- DEVICE_LOST during teardown: still release handles.
-            end
+            -- DEVICE_LOST during teardown: still release handles.
+            pcall(fn.deviceWaitIdle, ctx.device)
         end
         if ctx.command_pool then
             if fn.destroyCommandPool then
@@ -1362,29 +1360,6 @@ function _M.abi_check()
             if sz ~= expected_sz then
                 return nil, mkerr(_M.ERRORS.ABI_MISMATCH,
                     ('%s sizeof = %d, expected %d'):format(name, sz, expected_sz))
-            end
-            local prev = -1
-            for _, field in ipairs({ 'sType', 'pNext', 'pApplicationName', 'applicationVersion',
-                'pEngineName', 'engineVersion', 'apiVersion', 'flags', 'pApplicationInfo',
-                'enabledLayerCount', 'ppEnabledLayerNames', 'enabledExtensionCount',
-                'ppEnabledExtensionNames', 'queueCreateInfoCount', 'pQueueCreateInfos',
-                'pEnabledFeatures', 'queueFamilyIndex', 'queueCount', 'pQueuePriorities',
-                'size', 'usage', 'sharingMode', 'queueFamilyIndexCount', 'pQueueFamilyIndices',
-                'allocationSize', 'memoryTypeIndex', 'codeSize', 'pCode', 'binding',
-                'descriptorType', 'descriptorCount', 'stageFlags', 'pImmutableSamplers',
-                'bindingCount', 'pBindings', 'offset', 'setLayoutCount', 'pSetLayouts',
-                'pushConstantRangeCount', 'pPushConstantRanges', 'stage', 'module', 'pName',
-                'pSpecializationInfo', 'layout', 'basePipelineHandle', 'basePipelineIndex',
-                'type', 'maxSets', 'poolSizeCount', 'pPoolSizes', 'descriptorPool',
-                'descriptorSetCount', 'pSetLayouts2', 'buffer', 'range', 'dstSet',
-                'dstBinding', 'dstArrayElement', 'descriptorCount2', 'descriptorType2',
-                'pImageInfo', 'pBufferInfo', 'pTexelBufferView', 'commandPool', 'level',
-                'commandBufferCount', 'pInheritanceInfo', 'waitSemaphoreCount',
-                'pWaitSemaphores', 'pWaitDstStageMask', 'commandBufferCount2',
-                'pCommandBuffers', 'signalSemaphoreCount', 'pSignalSemaphores',
-                'srcAccessMask', 'dstAccessMask', 'srcQueueFamilyIndex', 'dstQueueFamilyIndex',
-                'constantID', 'mapEntryCount', 'pMapEntries', 'dataSize', 'pData' }) do
-                -- offset stability: golden offsets must be non-decreasing.
             end
             -- Compare every declared field against the golden table (when listed).
             local ctype = ffi.typeof(name)

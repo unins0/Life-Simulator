@@ -126,7 +126,7 @@ end
 tests['mutateWeights does not alter parent'] = function()
     math.randomseed(42)
     local parentSlot          = ai_module.genWeights()
-    local parentData, parentFfi = H.genomeData(parentSlot) -- объект данных родителя
+    local parentData, parentFfi = H.genomeData(parentSlot)
     local snapshot            = H.dataCopy(parentSlot)     -- копия ДО вызова
 
     local childSlot = ai_module.mutateWeights(parentSlot)

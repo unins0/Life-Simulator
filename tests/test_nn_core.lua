@@ -62,12 +62,6 @@ local function network_stream(common, network_id)
     return w
 end
 
-local function count_values(t)
-    local n = 0
-    for _ in pairs(t) do n = n + 1 end
-    return n
-end
-
 -- Build a corpus guaranteed to pass every gate: thresholds far below any
 -- pre-activation (never triggers the dead zone), all-positive weights and
 -- inputs (signs always agree), over all three topologies.

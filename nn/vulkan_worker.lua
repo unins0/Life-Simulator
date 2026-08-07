@@ -30,7 +30,6 @@ local VK = vulkan.VK
 
 local _M = { _VERSION = '1.0.0', name = 'vulkan_worker' }
 
-local WORKGROUP = 64
 local FENCE_TIMEOUT_NS = 10 ^ 9 -- 1 s per dispatch
 
 -- love.thread availability (never required).

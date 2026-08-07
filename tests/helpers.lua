@@ -36,17 +36,6 @@ function H.dataLen(slot)
     return #d
 end
 
--- Запись веса №i (1-based) в данные слота (для синтетических геномов).
-function H.setWeightAt(slot, i, value)
-    local d, ffi = H.genomeData(slot)
-    if d == nil then
-        d = {}
-        shares.CELL_GENOMES[slot] = d
-        ffi = false
-    end
-    if ffi then d[i - 1] = value else d[i] = value end
-end
-
 -- Независимая копия данных слота в обычную таблицу (для сравнения "до/после").
 function H.dataCopy(slot)
     local d, ffi = H.genomeData(slot)
