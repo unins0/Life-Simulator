@@ -612,4 +612,29 @@ tests['tick returns true on extinction'] = function()
     assert(next(shares.MAP_CELLS) == nil, 'MAP_CELLS must be empty after extinction')
 end
 
+-- ---------------------------------------------------------------------------
+-- Тик возвращает вторым значением read-only статистику: каждый ключ числовой,
+-- счётчики парных буферов (moves/extracts) уже поделены на 2.
+-- ---------------------------------------------------------------------------
+tests['tick returns read-only stats table as second value'] = function()
+    math.randomseed(7)
+    sim_module.reset(shares)
+    local sprout = cell_module.initCell(6, 10, 10, 0, {energy = 100, minerals = 100})
+    sim_module.addCell(shares, sprout, view)
+    local extinct, stats = sim_module.tick(shares, view)
+    assert(type(extinct) == 'boolean', 'first return must stay the extinction bool')
+    assert(type(stats) == 'table', 'second return must be a table')
+    assert(stats.cells == shares.CELL_COUNTER, 'stats.cells must equal CELL_COUNTER')
+    assert(stats.births >= 0 and stats.deaths >= 0, 'births/deaths must be counts')
+    assert(stats.moves == stats.moves % 1 and stats.extracts == stats.extracts % 1,
+        'moves/extracts must be whole (pair counts halved)')
+    assert(type(stats.ai_calls) == 'number', 'stats.ai_calls must be numeric')
+
+    -- Пустая карта: тик не падает и статистика согласована.
+    sim_module.reset(shares)
+    local ext2, st2 = sim_module.tick(shares, view)
+    assert(ext2 == true, 'empty map must report extinction')
+    assert(st2.cells == 0, 'empty map must report 0 cells')
+end
+
 return tests

@@ -14,6 +14,14 @@ local tps_threshold = 1.0 / TPS
 local tps_timer     = 0.0
 local pause         = true
 
+-- Console metrics (1s cadence; os.clock is read-only / determinism-safe).
+local report_timer    = 0.0
+local report_clock    = 0.0
+local report_ticks    = 0
+local report_acc      = {births=0, deaths=0, moves=0, updates=0, extracts=0, ai_calls=0}
+local extinct_steps   = 0
+local extinct_peak    = 0
+
 -- Camera variables
 local screen_width, screen_height = LG.getDimensions()
 local view_mode   = 0 -- 0: normal, 1: energy, 2: cell minerals, 3: map minerals
@@ -69,6 +77,10 @@ function regenMap()
         rand(1, shares.MAP_HEIGHT),
         rand(0, 3)
     ), view)
+    extinct_steps = 0
+    extinct_peak  = shares.CELL_COUNTER
+    print(('[init] map=%dx%d tps=%g cells=%d'):format(
+        shares.MAP_WIDTH, shares.MAP_HEIGHT, 1 / tps_threshold, shares.CELL_COUNTER))
 end
 
 function initCellBatch()
@@ -117,7 +129,40 @@ function love.update(dt)
     if not pause then tps_timer = tps_timer + dt end
     while tps_timer >= tps_threshold do
         tps_timer = tps_timer - tps_threshold
-        if sim_module.tick(shares, view) then regenMap() end
+        local t0 = os.clock()
+        local extinct, stats = sim_module.tick(shares, view)
+        local dt_tick = os.clock() - t0
+        report_clock = report_clock + dt_tick
+        report_ticks = report_ticks + 1
+        extinct_steps = extinct_steps + 1
+        if shares.CELL_COUNTER > extinct_peak then extinct_peak = shares.CELL_COUNTER end
+        if stats then
+            report_acc.births   = report_acc.births   + stats.births
+            report_acc.deaths   = report_acc.deaths   + stats.deaths
+            report_acc.moves    = report_acc.moves    + stats.moves
+            report_acc.updates  = report_acc.updates  + stats.updates
+            report_acc.extracts = report_acc.extracts + stats.extracts
+            report_acc.ai_calls = report_acc.ai_calls + stats.ai_calls
+        end
+        if extinct then
+            print(('[extinct] survived=%d peak=%d'):format(extinct_steps, extinct_peak))
+            regenMap()
+        end
+        report_timer = report_timer + tps_threshold
+        if report_timer >= 1.0 then
+            local avg_ms = report_clock / report_ticks * 1000
+            print(('[1s] tick=%.3fms cells=%d b=%d d=%d m=%d u=%d x=%d ai=%d'):format(
+                avg_ms,
+                shares.CELL_COUNTER,
+                report_acc.births, report_acc.deaths, report_acc.moves,
+                report_acc.updates, report_acc.extracts, report_acc.ai_calls))
+            report_timer = report_timer - 1.0
+            report_clock = 0.0
+            report_ticks = 0
+            report_acc.births, report_acc.deaths = 0, 0
+            report_acc.moves, report_acc.updates = 0, 0
+            report_acc.extracts, report_acc.ai_calls = 0, 0
+        end
     end
 end
 
@@ -217,7 +262,8 @@ function love.wheelmoved(x, y)
 end
 
 function love.keypressed(key, scancode, isrepeat)
-    if     key == 'space' then pause = not(pause) 
+    if     key == 'space' then pause = not(pause)
+        print(('[pause] state=%s'):format(pause and 'paused' or 'running'))
     elseif key == 'up'    then tps_threshold = shares.clamp(tps_threshold / 1.1, 0.002, 1.0)
     elseif key == 'down'  then tps_threshold = shares.clamp(tps_threshold * 1.1, 0.002, 1.0)
     elseif key == 'u'     then draw_interface = not(draw_interface)

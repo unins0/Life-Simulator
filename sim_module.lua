@@ -170,6 +170,7 @@ function M.tick(state, view)
     local extr_idx, spawn_idx   = 0, 0
     local death_idx, update_idx = 0, 0
     local move_idx, release_idx = 0, 0
+    local ai_calls              = 0
 
     -- Indices written into BUFFER_ENERGY/BUFFER_MINERAL this tick (dedup),
     -- so the transfer phase skips the full-map scan.
@@ -259,6 +260,7 @@ function M.tick(state, view)
                 for j = 1, 4 do
                     data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
                 end
+                ai_calls = ai_calls + 1
                 local action = ai_module.run(
                     CELL_GENOMES[cell[11]],
                     AI_LAYERS_SEED,
@@ -287,6 +289,7 @@ function M.tick(state, view)
                 data[4] = cell[6]
                 data[5] = state.sun_factor
                 data[6] = target_type or 0
+                ai_calls = ai_calls + 1
                 local action = floor(ai_module.run(
                     CELL_GENOMES[cell[11]],
                     AI_LAYERS_SPORE,
@@ -326,6 +329,7 @@ function M.tick(state, view)
                 for j = 1, 4 do
                     data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
                 end
+                ai_calls = ai_calls + 1
                 local res = ai_module.run(
                     CELL_GENOMES[cell[11]],
                     AI_LAYERS_SPROUT,
@@ -505,7 +509,17 @@ function M.tick(state, view)
         M.moveCell(state, idx_from, idx_to, view)
     end
 
-    return state.CELL_COUNTER <= 0
+    -- moves/extracts are pair-buffered, so their recorded counts are halved.
+    local stats = {
+        births   = spawn_idx,
+        deaths   = death_idx,
+        moves    = move_idx / 2,
+        updates  = update_idx,
+        extracts = extr_idx / 2,
+        ai_calls = ai_calls,
+        cells    = state.CELL_COUNTER,
+    }
+    return state.CELL_COUNTER <= 0, stats
 end
 
 return M
