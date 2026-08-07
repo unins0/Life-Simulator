@@ -13,6 +13,8 @@ local LG     = love.graphics
 local tps_threshold = 1.0 / TPS
 local tps_timer     = 0.0
 local pause         = true
+-- Hard ceiling on catch-up ticks/frame so a slow frame cannot spiral the sim.
+local MAX_TICKS_PER_FRAME = 8
 
 -- Console metrics (1s cadence; os.clock is read-only / determinism-safe).
 local report_timer    = 0.0
@@ -127,7 +129,9 @@ end
 
 function love.update(dt)
     if not pause then tps_timer = tps_timer + dt end
-    while tps_timer >= tps_threshold do
+    local ticks_run = 0
+    while tps_timer >= tps_threshold and ticks_run < MAX_TICKS_PER_FRAME do
+        ticks_run = ticks_run + 1
         tps_timer = tps_timer - tps_threshold
         local t0 = os.clock()
         local extinct, stats = sim_module.tick(shares, view)
@@ -163,6 +167,11 @@ function love.update(dt)
             report_acc.moves, report_acc.updates = 0, 0
             report_acc.extracts, report_acc.ai_calls = 0, 0
         end
+    end
+    -- Cap reached with time still owed: drop the overdue remainder so the
+    -- catch-up cannot carry an unbounded backlog into the next frame.
+    if tps_timer >= tps_threshold then
+        tps_timer = tps_timer % tps_threshold
     end
 end
 
