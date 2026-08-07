@@ -24,6 +24,9 @@ local report_acc      = {births=0, deaths=0, moves=0, updates=0, extracts=0, ai_
 local extinct_steps   = 0
 local extinct_peak    = 0
 
+-- Minerals-only conservation baseline (cells + cost reserve + map), reset on regen.
+local mineral_baseline = 0.0
+
 -- Camera variables
 local screen_width, screen_height = LG.getDimensions()
 local view_mode   = 0 -- 0: normal, 1: energy, 2: cell minerals, 3: map minerals
@@ -44,6 +47,19 @@ local mineral_batch
 
 -- Boring cached data
 local rand = math.random
+
+-- Total minerals on the map: live-cell minerals + the CELL_COSTS reserve each
+-- live cell carries + map minerals. Read-only; never mutates simulation state.
+local function mineralTotal()
+    local total = 0
+    for _, c in pairs(shares.MAP_CELLS) do
+        total = total + c[5] + shares.CELL_COSTS[c[2]]
+    end
+    for _, v in pairs(shares.MAP_MINERALS) do
+        total = total + v
+    end
+    return total
+end
 
 -- Graphics callbacks for sim_module (the sim core is pure Lua and renders
 -- through these). Each callback is identical to the sprite code that used to
@@ -81,6 +97,7 @@ function regenMap()
     ), view)
     extinct_steps = 0
     extinct_peak  = shares.CELL_COUNTER
+    mineral_baseline = mineralTotal()
     print(('[init] map=%dx%d tps=%g cells=%d'):format(
         shares.MAP_WIDTH, shares.MAP_HEIGHT, 1 / tps_threshold, shares.CELL_COUNTER))
 end
@@ -155,11 +172,14 @@ function love.update(dt)
         report_timer = report_timer + tps_threshold
         if report_timer >= 1.0 then
             local avg_ms = report_clock / report_ticks * 1000
-            print(('[1s] tick=%.3fms cells=%d b=%d d=%d m=%d u=%d x=%d ai=%d'):format(
+            local m_drift = mineralTotal() - mineral_baseline
+            local m_eps   = 1e-6 * math.max(1, math.abs(mineral_baseline))
+            print(('[1s] tick=%.3fms cells=%d b=%d d=%d m=%d u=%d x=%d ai=%d min=%.6g%s'):format(
                 avg_ms,
                 shares.CELL_COUNTER,
                 report_acc.births, report_acc.deaths, report_acc.moves,
-                report_acc.updates, report_acc.extracts, report_acc.ai_calls))
+                report_acc.updates, report_acc.extracts, report_acc.ai_calls,
+                m_drift, math.abs(m_drift) <= m_eps and '' or ' DRIFT'))
             report_timer = report_timer - 1.0
             report_clock = 0.0
             report_ticks = 0
