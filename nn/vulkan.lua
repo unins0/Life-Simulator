@@ -965,8 +965,6 @@ function _M.init(opts)
     local loader, lerr = load_loader()
     if not loader then return nil, lerr end
 
-    local gipa, gdpa = loader.gipa, loader.gdpa
-
     -- Optional: vkEnumerateInstanceVersion.
     local instance_version = 0
     do
@@ -1113,9 +1111,7 @@ function _M.init(opts)
     -- Bind all device-level functions.
     local fn = {}
     local device_bindings = {
-        -- queue
         getDeviceQueue = 'vkGetDeviceQueue',
-        -- buffer/memory
         createBuffer = 'vkCreateBuffer',
         destroyBuffer = 'vkDestroyBuffer',
         getBufferMemoryRequirements = 'vkGetBufferMemoryRequirements',
@@ -1126,10 +1122,8 @@ function _M.init(opts)
         unmapMemory = 'vkUnmapMemory',
         flushMappedMemoryRanges = 'vkFlushMappedMemoryRanges',
         invalidateMappedMemoryRanges = 'vkInvalidateMappedMemoryRanges',
-        -- shader module
         createShaderModule = 'vkCreateShaderModule',
         destroyShaderModule = 'vkDestroyShaderModule',
-        -- descriptor set / pipeline
         createDescriptorSetLayout = 'vkCreateDescriptorSetLayout',
         destroyDescriptorSetLayout = 'vkDestroyDescriptorSetLayout',
         createPipelineLayout = 'vkCreatePipelineLayout',
@@ -1140,7 +1134,6 @@ function _M.init(opts)
         destroyDescriptorPool = 'vkDestroyDescriptorPool',
         allocateDescriptorSets = 'vkAllocateDescriptorSets',
         updateDescriptorSets = 'vkUpdateDescriptorSets',
-        -- command
         createCommandPool = 'vkCreateCommandPool',
         destroyCommandPool = 'vkDestroyCommandPool',
         allocateCommandBuffers = 'vkAllocateCommandBuffers',
@@ -1153,7 +1146,6 @@ function _M.init(opts)
         cmdDispatch = 'vkCmdDispatch',
         cmdCopyBuffer = 'vkCmdCopyBuffer',
         cmdPipelineBarrier = 'vkCmdPipelineBarrier',
-        -- queue/fence/semaphore
         queueSubmit = 'vkQueueSubmit',
         waitForFences = 'vkWaitForFences',
         resetFences = 'vkResetFences',
@@ -1185,11 +1177,9 @@ function _M.init(opts)
         return fail(mkerr(_M.ERRORS.VULKAN_INITIALIZATION_FAILED, 'vkCreateCommandPool failed: ' .. res))
     end
 
-    -- Queue.
     local queue = ffi.new('VkQueue[1]')
     fn.getDeviceQueue(device, family, 0, queue)
 
-    -- Instance function table.
     local instance_fn = {
         destroyInstance = resolve(loader, instance, 'instance', 'vkDestroyInstance', 'PFN_vkDestroyInstance'),
         enumeratePhysicalDevices = fnEnumPhys,

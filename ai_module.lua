@@ -1,6 +1,5 @@
 local M = {}
 
--- Configuration
 M.GENOME_INIT_MULT         = 100.0
 M.GENOME_MUTATION_STRENGHT = 0.1
 M.GENOME_MUTATION_CHANCE   = 0.1

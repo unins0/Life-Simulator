@@ -358,7 +358,6 @@ function M.model_to_nnw(model, opts)
 
     local records, payloads = {}, {}
     local next_tensor = 1
-    local tensor_id = {}
     local matrix_tensor = {}
 
     -- Assign tensor ids first (deterministic order).
@@ -731,7 +730,6 @@ function M.read(bytes)
         net.matrices = matrices
         net.layers_inited = nil
     end
-    model.topology_identity = table.concat(id_parts, ':')
     for net_id, net in pairs(model.networks) do
         id_parts[#id_parts + 1] = net_id .. '=' .. table.concat(net.layers, '-')
     end

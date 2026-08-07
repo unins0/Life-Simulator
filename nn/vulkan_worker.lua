@@ -44,7 +44,7 @@ _M.has_love_thread = has_love_thread
 local Worker = {}
 Worker.__index = Worker
 
--- create_host_buffer(ctx, bytes, usage) -> {buffer, memory, mapped, f32, u8} | nil, err
+-- create_host_buffer(ctx, bytes, usage) -> {buffer, memory, f32, u32} | nil, err
 local function create_host_buffer(ctx, bytes, usage)
     local fn = ctx.fn.device
     local bci = ffi.new('VkBufferCreateInfo')
@@ -96,9 +96,7 @@ local function create_host_buffer(ctx, bytes, usage)
         bytes = bytes,
         buffer = buf[0],
         memory = mem[0],
-        mapped = ptr[0],
         f32 = ffi.cast('float*', ptr[0]),
-        u8 = ffi.cast('uint8_t*', ptr[0]),
         u32 = ffi.cast('uint32_t*', ptr[0]),
     }, nil
 end
@@ -180,13 +178,6 @@ function Worker:ensure_buffer(kind, bytes)
     if not nb then return nil, err end
     self.buffers[kind] = nb
     return nb, nil
-end
-
--- write_floats(buf, offset_floats, values, n)
-local function write_floats(buf, offset_floats, values, n)
-    for i = 1, n do
-        buf.f32[offset_floats + i - 1] = values[i]
-    end
 end
 
 -- get_descriptor_set(pipe, buffers) -> set | nil, err

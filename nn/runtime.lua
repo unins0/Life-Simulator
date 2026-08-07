@@ -394,7 +394,6 @@ function Runtime:forward(network_id, weights, inputs)
     end
     self.metrics['forward calls'] = (self.metrics['forward calls'] or 0) + 1
     if self.backend == 'gpu' then
-        local out = {}
         local ok, err = self:_forward_gpu(network_id, weights, inputs, nil, self.precision)
         if not ok then return nil, err end
         return ok
@@ -917,14 +916,10 @@ function Runtime.new(opts)
     }, Runtime)
 
     -- Model loading: either a serialize model table {networks=...} or a raw
-    -- weights blob (common genome).
+    -- weights blob (common genome); per-network slices are lazy.
     local model = opts.model
     if model ~= nil then
-        if type(model) == 'table' and model.networks then
-            self.model = model
-        else
-            self.model = model -- raw blob; per-network slices are lazy
-        end
+        self.model = model
     end
     return self
 end

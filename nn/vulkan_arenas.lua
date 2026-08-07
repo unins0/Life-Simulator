@@ -252,7 +252,7 @@ function Arena:write(base, data, len)
         for i = 1, n do tmp[i - 1] = data[i] end
         ffi.copy(self.mapped + base, tmp, n)
     end
-    self:_flush(base, n)
+    self:_flush()
 end
 
 -- write_f32(base, floats): copy a Lua array of numbers as float32.
@@ -262,19 +262,19 @@ function Arena:write_f32(base, floats, len)
     local tmp = ffi.new('float[?]', n)
     for i = 1, n do tmp[i - 1] = floats[i] end
     ffi.copy(self.mapped + base, tmp, n * 4)
-    self:_flush(base, n * 4)
+    self:_flush()
 end
 
 -- Flush host writes to the device when the memory is not coherent. We flush
 -- the whole allocation (offset 0) to stay clear of nonCoherentAtomSize
 -- alignment constraints for partial ranges.
-function Arena:_flush(base, bytes)
+function Arena:_flush()
     if self.coherent or not self.host_visible then return end
     local mr = ffi.new('VkMappedMemoryRange')
     mr.sType = VK.STRUCTURE_TYPE_MAPPED_MEMORY_RANGE
     mr.memory = self.memory
     mr.offset = 0
-    mr.size = VK.VK_WHOLE_SIZE -- VK_WHOLE_SIZE
+    mr.size = VK.VK_WHOLE_SIZE
     self.ctx.fn.device.flushMappedMemoryRanges(self.ctx.device, 1, mr)
 end
 
@@ -407,7 +407,7 @@ function ArenaSet:stage(genome_id, profile, item)
     -- block 8 = 30 bytes); align the entry to 4 so the GPU word reads are safe.
     local payload_len = item.payload_len
     if not payload_len then
-        payload_len = type(item.payload) == 'string' and #item.payload or #item.payload
+        payload_len = #item.payload
     end
     local payload_base, err = payload:alloc(payload_len, 4)
     if not payload_base then return nil, err end

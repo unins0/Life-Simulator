@@ -45,7 +45,6 @@ local cell_sprites
 local cell_batch
 local mineral_batch
 
--- Boring cached data
 local rand = math.random
 
 -- Total minerals on the map: live-cell minerals + the CELL_COSTS reserve each
@@ -157,14 +156,12 @@ function love.update(dt)
         report_ticks = report_ticks + 1
         extinct_steps = extinct_steps + 1
         if shares.CELL_COUNTER > extinct_peak then extinct_peak = shares.CELL_COUNTER end
-        if stats then
-            report_acc.births   = report_acc.births   + stats.births
-            report_acc.deaths   = report_acc.deaths   + stats.deaths
-            report_acc.moves    = report_acc.moves    + stats.moves
-            report_acc.updates  = report_acc.updates  + stats.updates
-            report_acc.extracts = report_acc.extracts + stats.extracts
-            report_acc.ai_calls = report_acc.ai_calls + stats.ai_calls
-        end
+        report_acc.births   = report_acc.births   + stats.births
+        report_acc.deaths   = report_acc.deaths   + stats.deaths
+        report_acc.moves    = report_acc.moves    + stats.moves
+        report_acc.updates  = report_acc.updates  + stats.updates
+        report_acc.extracts = report_acc.extracts + stats.extracts
+        report_acc.ai_calls = report_acc.ai_calls + stats.ai_calls
         if extinct then
             print(('[extinct] survived=%d peak=%d'):format(extinct_steps, extinct_peak))
             regenMap()
@@ -299,7 +296,4 @@ function love.keypressed(key, scancode, isrepeat)
     elseif key == 'e'     then view_mode = (view_mode + 1) % 4
     elseif key == 'r'     then regenMap()
     end
-end
-
-function love.quit()
 end

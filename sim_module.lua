@@ -136,7 +136,6 @@ end
 --   regenMap() tail   -> return state.CELL_COUNTER <= 0
 -- Returns true when no cells are left (main.lua then calls regenMap()).
 function M.tick(state, view)
-    -- Cache
     local CELL_ENERGY_CONS  = state.CELL_ENERGY_CONS
     local CELL_AGES         = state.CELL_AGES
     local CELL_COSTS        = state.CELL_COSTS
@@ -254,7 +253,6 @@ function M.tick(state, view)
                 end
 
             elseif typ == 4 then -- Seed
-                local x, y = idx2pos(idx)
                 data[1] = cell[3]
                 data[2] = cell[4]
                 data[3] = cell[5]
@@ -325,7 +323,6 @@ function M.tick(state, view)
                 end
 
             elseif typ == 6 then -- Sprout
-                local x, y = idx2pos(idx)
                 data[1] = cell[3]
                 data[2] = cell[4]
                 data[3] = cell[5]

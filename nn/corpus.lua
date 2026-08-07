@@ -160,7 +160,7 @@ local function evaluate_precision(c, runtime, p)
         if not packed then return nil, err end
         local out = {}
         for o = 1, #item.outputs do out[o] = 0 end
-        local _, pre, dead_flags = runtime:_run_packed(item.network_id, packed, item.inputs, out, true)
+        local _, _, dead_flags = runtime:_run_packed(item.network_id, packed, item.inputs, out, true)
         local item_ok = true
         for o, ref_out in ipairs(item.outputs) do
             local ref_dead = item.dead[o]
@@ -253,9 +253,7 @@ function corpus.replay(c, runtime)
         end
     end
     result.pass = result.gates.fp16 and result.gates.fp8 and result.gates.fp4 and result.gates.fp2
-    if runtime then
-        runtime._gate_results = result
-    end
+    runtime._gate_results = result
     return result
 end
 
