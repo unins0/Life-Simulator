@@ -119,7 +119,6 @@ function M.reset(state)
 
     local MINERALS_MIN, MINERALS_MAX = state.MINERALS_MIN, state.MINERALS_MAX
     for i = 1, state.MAP_SIZE do
-        MAP_CELLS[i]    = nil
         MAP_TYPES[i]    = 0
         MAP_MINERALS[i] = rand(MINERALS_MIN, MINERALS_MAX)
     end
