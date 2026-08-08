@@ -263,10 +263,11 @@ end
 function love.mousepressed(x, y, button, istouch)
     if button == 1 then is_mouse_pressed = true
     elseif button == 2 then
-        target_cell.idx  = shares.pos2idx(highlight_x, highlight_y)
+        local idx     = shares.pos2idx(highlight_x, highlight_y)
+        target_cell.idx  = idx
         target_cell.x    = highlight_x
         target_cell.y    = highlight_y
-        target_cell.cell = shares.MAP_CELLS[shares.pos2idx(highlight_x, highlight_y)]
+        target_cell.cell = shares.MAP_CELLS[idx]
     end
 end
 
