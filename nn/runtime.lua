@@ -143,6 +143,12 @@ end
 
 -- Quantize one layer matrix into { payload, scales, offsets, logical,
 -- padded, blocks, max_code }. max_code: nil (fp8) / 15 (fp4) / 3 (fp2).
+local function max_code_for(precision)
+    if precision == 'fp8' then return nil end
+    if precision == 'fp4' then return 15 end
+    return 3
+end
+
 local function pack_matrix(values, block_size, max_code)
     local logical = #values
     local blocks = quantize.block_count(logical, block_size)
@@ -225,14 +231,7 @@ function Runtime:_pack(network_id, stream, precision, block_size)
         packed.fp16_matrices = m16
         return packed
     end
-    local max_code
-    if precision == 'fp8' then
-        max_code = nil
-    elseif precision == 'fp4' then
-        max_code = 15
-    else
-        max_code = 3
-    end
+    local max_code = max_code_for(precision)
     local per_layer = {}
     local all_payload = {}
     local all_scales, all_offsets = {}, {}
@@ -655,14 +654,7 @@ function Runtime:_pack_layer(network_id, stream, precision, block_size, li)
         specials[#specials + 1] = dec.specials[base + 2]
         specials[#specials + 1] = dec.specials[base + 3]
     end
-    local max_code
-    if precision == 'fp8' then
-        max_code = nil
-    elseif precision == 'fp4' then
-        max_code = 15
-    else
-        max_code = 3
-    end
+    local max_code = max_code_for(precision)
     local pm = pack_matrix(m.values, block_size, max_code)
     local item = {
         payload = pm.payload,
