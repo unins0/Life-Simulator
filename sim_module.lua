@@ -196,6 +196,14 @@ function M.tick(state, view)
             data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
         end
     end
+    local function queueDeath(idx)
+        death_idx = death_idx + 1
+        BUFFER_DEATH[death_idx] = idx
+    end
+    local function queueUpdate(idx)
+        update_idx = update_idx + 1
+        BUFFER_UPDATE[update_idx] = idx
+    end
 
     state.step = state.step + 1
     state.sun_factor = M.calcSunFactor(state, state.step)
@@ -219,8 +227,7 @@ function M.tick(state, view)
                     BUFFER_ENERGY[parent_idx] = (BUFFER_ENERGY[parent_idx] or 0.0) + LEAF_ENERGY_GEN * state.sun_factor
                     track(parent_idx)
                 else
-                    death_idx = death_idx + 1
-                    BUFFER_DEATH[death_idx] = idx
+                    queueDeath(idx)
                 end
 
             elseif typ == 2 then -- Root
@@ -233,8 +240,7 @@ function M.tick(state, view)
                     BUFFER_EXTR[extr_idx - 1] = pos2idx(x + x_offsets[dir], y + y_offsets[dir])
                     BUFFER_EXTR[extr_idx]     = cell[7]
                 else
-                    death_idx = death_idx + 1
-                    BUFFER_DEATH[death_idx] = idx
+                    queueDeath(idx)
                 end
 
             elseif typ == 3 then -- Stem
@@ -249,8 +255,7 @@ function M.tick(state, view)
                     end
                 end
                 if n == 1 then
-                    death_idx = death_idx + 1
-                    BUFFER_DEATH[death_idx] = idx
+                    queueDeath(idx)
                 else
                     cell[4] = cell[4] / n
                     cell[5] = cell[5] / n
@@ -275,8 +280,7 @@ function M.tick(state, view)
                 if action > 0.0 then
                     cell[2] = 6
                     cell[5] = cell[5] + CELL_COSTS[4] - CELL_COSTS[6]
-                    update_idx = update_idx + 1
-                    BUFFER_UPDATE[update_idx] = idx
+                    queueUpdate(idx)
                 end
 
             elseif typ == 5 then -- Spore
@@ -304,12 +308,10 @@ function M.tick(state, view)
                 )[1]) % 5
                 if     action == 1 then
                     cell[3] = (cell[3] - 1) % 4
-                    update_idx = update_idx + 1
-                    BUFFER_UPDATE[update_idx] = idx
+                    queueUpdate(idx)
                 elseif action == 2 then
                     cell[3] = (cell[3] + 1) % 4
-                    update_idx = update_idx + 1
-                    BUFFER_UPDATE[update_idx] = idx
+                    queueUpdate(idx)
                 elseif action == 3 then
                     move_idx = move_idx + 2
                     BUFFER_MOVING[move_idx - 1] = idx
@@ -321,8 +323,7 @@ function M.tick(state, view)
                         local dir = (cell[3] + j + 1) % 4 + 1
                         cell[6 + j] = pos2idx(x + x_offsets[dir], y + y_offsets[dir])
                     end
-                    update_idx = update_idx + 1
-                    BUFFER_UPDATE[update_idx] = idx
+                    queueUpdate(idx)
                 end
 
             elseif typ == 6 then -- Sprout
@@ -365,8 +366,7 @@ function M.tick(state, view)
                     -- Morph 6 -> 3: keep the CELL_COSTS reserve invariant like the
                     -- Seed->Sprout and Spore->Seed morphs (reserve must not leak).
                     cell[5] = cell[5] + CELL_COSTS[6] - CELL_COSTS[3]
-                    update_idx = update_idx + 1
-                    BUFFER_UPDATE[update_idx] = idx
+                    queueUpdate(idx)
                     -- BUG-1: Sprout -> Stem drops the genome ref (Stem is not an
                     -- AI cell); release is DEFERRED to apply (BUFFER_RELEASE —
                     -- compute must not touch genome counters). Children got their
@@ -377,8 +377,7 @@ function M.tick(state, view)
                 end
             end
         else
-            death_idx = death_idx + 1
-            BUFFER_DEATH[death_idx] = idx
+            queueDeath(idx)
         end
 
         ::continue::
