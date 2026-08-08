@@ -1,4 +1,3 @@
--- Simulation configuration
 local TPS = 3
 
 local VIEW_MODES = {'Normal', 'Map Minerals'}
@@ -9,7 +8,6 @@ local sim_module  = require('sim_module')
 
 local LG     = love.graphics
 
--- Clocks-n-Timers
 local tps_threshold = 1.0 / TPS
 local tps_timer     = 0.0
 local pause         = true
@@ -27,7 +25,6 @@ local extinct_peak    = 0
 -- Minerals-only conservation baseline (cells + cost reserve + map), reset on regen.
 local mineral_baseline = 0.0
 
--- Camera variables
 local screen_width, screen_height = LG.getDimensions()
 local view_mode   = 0 -- 0: normal, 1: map minerals
 local target_cell = {idx = 0, x = 0, y = 0, cell = nil}

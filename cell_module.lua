@@ -9,7 +9,6 @@ local x_offsets = {1, 0, -1, 0}
 local y_offsets = {0, 1, 0, -1}
 
 function M.initCell(typ, x, y, direction, args)
-    -- Common attributes
     args           = args or {}
     local energy   = args.energy   or shares.CELL_INIT_ENERGY
     local minerals = args.minerals or shares.CELL_INIT_MINERALS

@@ -34,13 +34,10 @@ local PRECISIONS = { fp32 = true, fp16 = true, fp8 = true, fp4 = true, fp2 = tru
 local PACKED_FORMATS = { fp8 = true, fp4 = true, fp2 = true }
 local GATE_THRESHOLDS = corpus_mod.GATE_THRESHOLDS
 
--- ------------------------------------------------------------- FNV-ish hash --
 -- Deterministic string hash (arithmetic-only: LuaJIT bitwise ops are signed
 -- int32, so plain arithmetic keeps both interpreters byte-identical).
 -- Shared with nn.corpus.
 Runtime.hash_string = corpus_mod.hash_string
-
--- ------------------------------------------------------------ weight blobs --
 
 -- Decode any weights blob into a per-network node-major 1-based Lua table.
 --   table  -> numeric array (common genome OR per-network length)
@@ -126,8 +123,6 @@ end
 local function genome_key(weights, profile_key)
     return tostring(weights) .. '|' .. profile_key
 end
-
--- ---------------------------------------------------------------- packing --
 
 -- Validate finiteness of a decoded weight stream (reject NaN/Inf).
 local function check_finite(w, backend)
@@ -274,8 +269,6 @@ local function unpack_matrices(packed)
     end
     return matrices, packed.specials
 end
-
--- --------------------------------------------------------------- forward --
 
 -- Exact forward over decomposed matrices + interleaved specials. Mirrors the
 -- reference activation: value = prev + bias; if value <= threshold then dead.
@@ -496,8 +489,6 @@ function Runtime:forward_batch(network_id, batch_items, in_desc, out_desc)
     return out_buf
 end
 
--- ------------------------------------------------------------- precision --
-
 -- Switch the active precision. Gates (N6): fp16/fp8 need the capability AND
 -- a passed corpus gate; fp4/fp2 need options.experimental == true (a passed
 -- gate alone is NOT sufficient); fp32 is always allowed.
@@ -548,8 +539,6 @@ function Runtime:_invalidate_cache()
     self._pack_cache = {}
 end
 
--- ------------------------------------------------------------- capabilities --
-
 function Runtime:capabilities()
     return {
         backend = self.backend,
@@ -570,8 +559,6 @@ function Runtime:capabilities()
     }
 end
 
--- ---------------------------------------------------------------- shutdown --
-
 function Runtime:shutdown()
     if self._shutdown then return end
     if self.backend == 'gpu' and self._worker then
@@ -581,8 +568,6 @@ function Runtime:shutdown()
     end
     self._shutdown = true
 end
-
--- ---------------------------------------------------------------- gpu path --
 
 local function get_vulkan()
     local ok, v = pcall(require, 'nn.vulkan')
@@ -819,8 +804,6 @@ function Runtime:_forward_batch_gpu(network_id, batch_items, in_desc, out_desc)
     end
     return true
 end
-
--- ------------------------------------------------------------- construction --
 
 -- Backend resolution (once at init).
 local function resolve_backend(requested, deterministic)

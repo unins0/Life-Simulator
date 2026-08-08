@@ -40,7 +40,6 @@ do
 end
 _M.has_love_thread = has_love_thread
 
--- ------------------------------------------------------ worker internals ----
 local Worker = {}
 Worker.__index = Worker
 
@@ -158,7 +157,6 @@ function Worker:get_descriptor_set(pipe, buffers)
     return set, nil
 end
 
--- --------------------------------------------------------- batch execution --
 -- run_batch(batch) -> result table (never raises). A batch:
 --   { tick_id, model_hash, backend='vulkan', precision, profile={...},
 --     layer_map={...}?, rows={ {genome_id, profile, item} , ... },
@@ -368,7 +366,6 @@ function Worker:run_batch(batch)
     return result
 end
 
--- ------------------------------------------------------------ passthrough ----
 -- Same-thread worker: used when love.thread is unavailable (plain LuaJIT). The
 -- public API mirrors the threaded worker (submit/wait/shutdown) so callers are
 -- agnostic.
@@ -441,7 +438,6 @@ function Passthrough:shutdown()
     return true
 end
 
--- --------------------------------------------------------------- LÖVE ----
 -- love.thread worker: the device context is created INSIDE the thread. Only
 -- plain Lua data crosses the channels (never FFI cdata — cdata cannot cross
 -- threads). Shutdown drains the channel, waits, and terminates the thread.
@@ -543,7 +539,6 @@ function LoveThread:shutdown()
     return true
 end
 
--- ---------------------------------------------------------------- factory ----
 -- new(opts) -> worker | nil, err. Prefers love.thread; falls back to the
 -- same-thread passthrough so the module works in plain LuaJIT.
 function _M.new(opts)
