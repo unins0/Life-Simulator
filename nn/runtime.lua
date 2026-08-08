@@ -593,8 +593,8 @@ end
 local function vulkan_available()
     local v = get_vulkan()
     if not v or not v.can_load then return false end
-    local ok = pcall(v.can_load)
-    if not ok or not v.can_load() then return false end
+    local ok, loader_ok = pcall(v.can_load)
+    if not ok or not loader_ok then return false end
     local ctx, err = v.init()
     if ctx then
         pcall(v.destroy, ctx)
