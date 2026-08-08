@@ -342,6 +342,23 @@ function Runtime:_profile_key(network_id, precision, block_size)
     return ('%s|%s|%d'):format(network_id, precision, block_size)
 end
 
+-- Cached pack: return the packed entry for (weights, profile), packing and
+-- caching on miss. Ensures the pack cache exists.
+function Runtime:_cached_pack(network_id, weights, stream, precision, block_size)
+    if not self._pack_cache then self._pack_cache = {} end
+    local key = genome_key(weights, self:_profile_key(network_id, precision, block_size))
+    local packed = self._pack_cache[key]
+    if packed then
+        self.metrics['pack cache hits'] = (self.metrics['pack cache hits'] or 0) + 1
+        return packed
+    end
+    self.metrics['pack cache misses'] = (self.metrics['pack cache misses'] or 0) + 1
+    local p, err = self:_pack(network_id, stream, precision, block_size)
+    if not p then return nil, err end
+    self._pack_cache[key] = p
+    return p
+end
+
 -- CPU forward core: decode + (cached) pack + run into `out`. No allocation of
 -- a new output table; returns `out` (caller-owned).
 function Runtime:_forward_cpu(network_id, weights, inputs, out, precision, use_cache)
@@ -349,22 +366,13 @@ function Runtime:_forward_cpu(network_id, weights, inputs, out, precision, use_c
     if not stream then return nil, err end
     precision = precision or self.precision
     local block_size = self.block_size
-    local key, packed
-    if use_cache and not self._pack_cache then self._pack_cache = {} end
+    local packed, err
     if use_cache then
-        key = genome_key(weights, self:_profile_key(network_id, precision, block_size))
-        packed = self._pack_cache[key]
-        if packed then
-            self.metrics['pack cache hits'] = (self.metrics['pack cache hits'] or 0) + 1
-        end
-    end
-    if not packed then
+        packed, err = self:_cached_pack(network_id, weights, stream, precision, block_size)
+        if not packed then return nil, err end
+    else
         packed, err = self:_pack(network_id, stream, precision, block_size)
         if not packed then return nil, err end
-        if use_cache then
-            self.metrics['pack cache misses'] = (self.metrics['pack cache misses'] or 0) + 1
-            self._pack_cache[key] = packed
-        end
     end
     local out_count = self.networks[network_id].layers[#self.networks[network_id].layers]
     for i = 1, out_count do out[i] = 0 end
@@ -458,7 +466,6 @@ function Runtime:forward_batch(network_id, batch_items, in_desc, out_desc)
 
     -- CPU: decode each item's own genome and run. Packed entries are cached
     -- by (genome identity, profile) — the production caching path.
-    if not self._pack_cache then self._pack_cache = {} end
     local out_count = net.layers[#net.layers]
     local precision, block_size = self.precision, self.block_size
     for c, item in ipairs(batch_items) do
@@ -469,16 +476,8 @@ function Runtime:forward_batch(network_id, batch_items, in_desc, out_desc)
         end
         local stream, err = self:_decode_weights(item_weights, nil, item_net)
         if not stream then return nil, err end
-        local key = genome_key(item_weights, self:_profile_key(item_net, precision, block_size))
-        local packed = self._pack_cache[key]
-        if packed then
-            self.metrics['pack cache hits'] = (self.metrics['pack cache hits'] or 0) + 1
-        else
-            self.metrics['pack cache misses'] = (self.metrics['pack cache misses'] or 0) + 1
-            packed, err = self:_pack(item_net, stream, precision, block_size)
-            if not packed then return nil, err end
-            self._pack_cache[key] = packed
-        end
+        local packed, err = self:_cached_pack(item_net, item_weights, stream, precision, block_size)
+        if not packed then return nil, err end
         local inputs = {}
         local base = (c - 1) * in_stride
         for k = 1, in_stride do
