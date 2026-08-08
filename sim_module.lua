@@ -186,6 +186,17 @@ function M.tick(state, view)
     -- same tick before the next run_into overwrites it.
     local ai_out = {}
 
+    local function buildInput(data, cell)
+        data[1] = cell[3]
+        data[2] = cell[4]
+        data[3] = cell[5]
+        data[4] = cell[6]
+        data[5] = state.sun_factor
+        for j = 1, 4 do
+            data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
+        end
+    end
+
     state.step = state.step + 1
     state.sun_factor = M.calcSunFactor(state, state.step)
 
@@ -252,14 +263,7 @@ function M.tick(state, view)
                 end
 
             elseif typ == 4 then -- Seed
-                data[1] = cell[3]
-                data[2] = cell[4]
-                data[3] = cell[5]
-                data[4] = cell[6]
-                data[5] = state.sun_factor
-                for j = 1, 4 do
-                    data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
-                end
+                buildInput(data, cell)
                 ai_calls = ai_calls + 1
                 local action = ai_module.run_into(
                     CELL_GENOMES[cell[11]],
@@ -322,14 +326,7 @@ function M.tick(state, view)
                 end
 
             elseif typ == 6 then -- Sprout
-                data[1] = cell[3]
-                data[2] = cell[4]
-                data[3] = cell[5]
-                data[4] = cell[6]
-                data[5] = state.sun_factor
-                for j = 1, 4 do
-                    data[5 + j] = (MAP_TYPES[cell[6 + j]] or 0)
-                end
+                buildInput(data, cell)
                 ai_calls = ai_calls + 1
                 local res = ai_module.run_into(
                     CELL_GENOMES[cell[11]],
