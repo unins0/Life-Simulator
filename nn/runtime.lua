@@ -37,14 +37,8 @@ local GATE_THRESHOLDS = corpus_mod.GATE_THRESHOLDS
 -- ------------------------------------------------------------- FNV-ish hash --
 -- Deterministic string hash (arithmetic-only: LuaJIT bitwise ops are signed
 -- int32, so plain arithmetic keeps both interpreters byte-identical).
-local function hash_string(s)
-    local h = 5381
-    for i = 1, #s do
-        h = (h * 33 + s:byte(i)) % 4294967296
-    end
-    return h
-end
-Runtime.hash_string = hash_string
+-- Shared with nn.corpus.
+Runtime.hash_string = corpus_mod.hash_string
 
 -- ------------------------------------------------------------ weight blobs --
 

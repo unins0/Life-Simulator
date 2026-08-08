@@ -39,6 +39,8 @@ local function hash_string(s)
     return h
 end
 
+corpus.hash_string = hash_string
+
 local function num_key(x)
     if x ~= x then return 'nan' end
     if x == math.huge then return 'inf' end
