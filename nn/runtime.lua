@@ -385,14 +385,21 @@ end
 
 -- Runtime:forward — convenience/debug path. On GPU this is a per-call
 -- pack+dispatch with no reuse; on CPU it may reuse the pack cache.
-function Runtime:forward(network_id, weights, inputs)
+-- Shared shutdown + unknown-network guard returns the error, or nil if alive.
+function Runtime:_check_alive(network_id)
     if self._shutdown then
-        return nil, errors.new('WORKER_SHUTDOWN', 'runtime is shut down', self.backend)
+        return errors.new('WORKER_SHUTDOWN', 'runtime is shut down', self.backend)
     end
     if not self.networks[network_id] then
-        return nil, errors.new('INVALID_ARGUMENT',
+        return errors.new('INVALID_ARGUMENT',
             ('unknown network %q'):format(tostring(network_id)), self.backend)
     end
+    return nil
+end
+
+function Runtime:forward(network_id, weights, inputs)
+    local guard_err = self:_check_alive(network_id)
+    if guard_err then return nil, guard_err end
     self.metrics['forward calls'] = (self.metrics['forward calls'] or 0) + 1
     if self.backend == 'gpu' then
         local ok, err = self:_forward_gpu(network_id, weights, inputs, nil, self.precision)
@@ -406,13 +413,8 @@ end
 -- Runtime:forward_into — caller-owned output buffer, no allocation, no
 -- retention. Returns `out`.
 function Runtime:forward_into(network_id, weights, inputs, out)
-    if self._shutdown then
-        return nil, errors.new('WORKER_SHUTDOWN', 'runtime is shut down', self.backend)
-    end
-    if not self.networks[network_id] then
-        return nil, errors.new('INVALID_ARGUMENT',
-            ('unknown network %q'):format(tostring(network_id)), self.backend)
-    end
+    local guard_err = self:_check_alive(network_id)
+    if guard_err then return nil, guard_err end
     if type(out) ~= 'table' then
         return nil, errors.new('INVALID_ARGUMENT', 'out must be a Lua table', self.backend)
     end
